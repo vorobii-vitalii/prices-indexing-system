@@ -54,6 +54,29 @@ Resources:
       DockerContext: ./PriceIndexingFunction
       Dockerfile: Dockerfile
 
+  GetAveragePriceForStockFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          PRICES_TABLE_NAME: !Ref PricesTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PricesTable
+      Events:
+        GetAveragePriceForStock:
+          Type: Api
+          Properties:
+            Path: /average/{symbol}/{from}/{to}
+            Method: get
+    Metadata:
+      DockerTag: java21-gradle-v1
+      DockerContext: ./GetAveragePriceForStockFunction
+      Dockerfile: Dockerfile
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -71,10 +94,19 @@ Resources:
 Outputs:
   PriceIndexingApi:
     Description: API Gateway endpoint URL for Prod stage for Price indexing function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/index/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/index/{symbol}"
+  GetAveragePriceForStockAou:
+    Description: API Gateway endpoint URL for Prod stage for Get average price for stock function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/average/{symbol}/{from}/{to}"
   PriceIndexingFunction:
     Description: Price indexing Lambda Function ARN
     Value: !GetAtt PriceIndexingFunction.Arn
+  GetAveragePriceForStockFunction:
+    Description: Get average price for stock Lambda Function ARN
+    Value: !GetAtt GetAveragePriceForStockFunction.Arn
   PriceIndexingFunctionIamRole:
     Description: Implicit IAM Role created for PriceIndexingFunction
     Value: !GetAtt PriceIndexingFunction.Arn
+  GetAveragePriceForStockFunctionIamRole:
+    Description: Implicit IAM Role created for Get average price for stock Lambda Function
+    Value: !GetAtt GetAveragePriceForStockFunction.Arn

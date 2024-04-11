@@ -4,6 +4,7 @@ import static java.time.temporal.ChronoUnit.SECONDS;
 
 import java.io.StringReader;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -32,47 +33,41 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 
 public class PriceIndexer implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-	public static final String TEXT_PLAIN = "text/plain";
-	public static final Duration GET_PRICES_TIMEOUT = Duration.of(10, SECONDS);
-	public static final Charset CHARSET = Charset.defaultCharset();
-	public static final int SUCCESS_CODE = 200;
-	public static final int INTERNAL_ERROR_CODE = 500;
-	protected static final String PRICES_TABLE_NAME = "PRICES_TABLE_NAME";
-	protected static final String SYMBOL_PARAM = "symbol";
-	protected static final int BAD_REQUEST = 400;
-	protected static final String CONTENT_TYPE = "Content-Type";
+	private static final String TEXT_PLAIN = "text/plain";
+	private static final Duration GET_PRICES_TIMEOUT = Duration.of(10, SECONDS);
+	private static final Charset CHARSET = Charset.defaultCharset();
+	private static final int SUCCESS_CODE = 200;
+	private static final int INTERNAL_ERROR_CODE = 500;
+	private static final String PRICES_TABLE_NAME = "PRICES_TABLE_NAME";
+	private static final String SYMBOL_PARAM = "symbol";
+	private static final int BAD_REQUEST = 400;
+	private static final String CONTENT_TYPE = "Content-Type";
 	private static final Logger LOGGER = LoggerFactory.getLogger(PriceIndexer.class);
 	// TODO: Integrate Secrets Manager
 	private static final String API_KEY = "IG9AOP32M1ZP9VBT";
-	public static final int BATCH_SIZE = 25;
+	private static final int BATCH_SIZE = 25;
 
-	DynamoDbClient dynamoDbClient = DynamoDbClient.builder().build();
+	private final DynamoDbClient dynamoDbClient = DynamoDbClient.builder().build();
 	private final HttpClient httpClient = HttpClient.newHttpClient();
 
 	public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
+		var symbol = extractSymbol(input);
 		var response = new APIGatewayProxyResponseEvent();
-
-		var symbol = Optional.ofNullable(input.getPathParameters()).map(v -> v.get(SYMBOL_PARAM)).map(String::trim).orElse(null);
 		if (!isSymbolValid(symbol)) {
 			LOGGER.warn("Received request with invalid symbol...");
 			return response.withStatusCode(BAD_REQUEST).withBody("Symbol is invalid!").withHeaders(Map.of(CONTENT_TYPE, TEXT_PLAIN));
 		}
 		LOGGER.info("Handling request to index prices for {} symbol", symbol);
 		try {
-			var request = HttpRequest.newBuilder()
-					.uri(new URI(getPricesURL(symbol)))
-					.timeout(GET_PRICES_TIMEOUT)
-					.GET()
-					.build();
+			var request = createGetPricesRequest(symbol);
 			var httpResponse = httpClient.send(request, responseInfo -> HttpResponse.BodySubscribers.ofString(CHARSET));
-			LOGGER.info("Prices response = {}", httpResponse);
 			var body = httpResponse.body();
 			if (body.contains("Invalid API call")) {
 				LOGGER.error("Failed to get prices for this symbol");
 				return response.withBody("Failed to get prices for this symbol").withStatusCode(INTERNAL_ERROR_CODE);
 			}
 			var records = CSVFormat.RFC4180.withFirstRecordAsHeader().parse(new StringReader(body));
-			List<WriteRequest> writeRequests = new ArrayList<>();
+			var writeRequests = new ArrayList<WriteRequest>();
 			for (var record : records) {
 				var timestamp = record.get("timestamp");
 				var highPrice = record.get("high");
@@ -99,6 +94,21 @@ public class PriceIndexer implements RequestHandler<APIGatewayProxyRequestEvent,
 			LOGGER.warn("Error occurred on prices indexing...", error);
 			return response.withBody("Error").withStatusCode(INTERNAL_ERROR_CODE);
 		}
+	}
+
+	private HttpRequest createGetPricesRequest(String symbol) throws URISyntaxException {
+		return HttpRequest.newBuilder()
+				.uri(new URI(getPricesURL(symbol)))
+				.timeout(GET_PRICES_TIMEOUT)
+				.GET()
+				.build();
+	}
+
+	private static String extractSymbol(APIGatewayProxyRequestEvent input) {
+		return Optional.ofNullable(input.getPathParameters())
+				.map(v -> v.get(SYMBOL_PARAM))
+				.map(String::trim)
+				.orElse(null);
 	}
 
 	private String getPricesURL(String symbol) {
