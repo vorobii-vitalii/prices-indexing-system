@@ -41,7 +41,7 @@ public class PriceIndexer implements RequestHandler<APIGatewayProxyRequestEvent,
 	protected static final String SYMBOL_PARAM = "symbol";
 	protected static final int BAD_REQUEST = 400;
 	protected static final String CONTENT_TYPE = "Content-Type";
-	private static final Logger LOGGER = LoggerFactory.getLogger(PriceIndexer.class);\
+	private static final Logger LOGGER = LoggerFactory.getLogger(PriceIndexer.class);
 	// TODO: Integrate Secrets Manager
 	private static final String API_KEY = "IG9AOP32M1ZP9VBT";
 	public static final int BATCH_SIZE = 25;
@@ -92,6 +92,7 @@ public class PriceIndexer implements RequestHandler<APIGatewayProxyRequestEvent,
 								BatchWriteItemRequest.builder().requestItems(Map.of(pricesTableName, batch)).build());
 						LOGGER.info("Batch write item response = {}", batchWriteItemResponse);
 					});
+			LOGGER.info("All prices for {} were written to DB!", symbol);
 			return response.withStatusCode(SUCCESS_CODE).withBody("Success!").withHeaders(Map.of(CONTENT_TYPE, TEXT_PLAIN));
 		}
 		catch (Exception error) {

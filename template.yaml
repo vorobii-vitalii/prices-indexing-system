@@ -27,6 +27,9 @@ Resources:
         - AttributeName: "Timestamp"
           KeyType: "RANGE"
       TableName: "Prices"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
 
   PriceIndexingFunction:
     Type: AWS::Serverless::Function

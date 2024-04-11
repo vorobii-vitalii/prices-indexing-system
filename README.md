@@ -4,6 +4,14 @@
 sam local invoke --event events/event.json PriceIndexingFunction
 ```
 
+```shell
+aws cloudformation delete-stack --stack-name stocks-prices-indexer
+```
+
+```shell
+sam deploy --on-failure DELETE
+```
+
 
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
