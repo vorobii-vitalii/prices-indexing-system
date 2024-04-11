@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.2'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.0'
+    implementation 'software.amazon.awssdk:dynamodb:2.25.28'
+
+    testImplementation 'junit:junit:4.12'
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.12'
+    implementation 'ch.qos.logback:logback-classic:1.5.4'
+    implementation 'ch.qos.logback:logback-core:1.5.4'
+
+    // Utils
+    implementation 'com.google.guava:guava:33.1.0-jre'
+
+    // CSV parsing
+    implementation 'org.apache.commons:commons-csv:1.10.0'
+
+}
+
+sourceCompatibility = 21
+targetCompatibility = 21
