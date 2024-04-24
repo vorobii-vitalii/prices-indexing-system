@@ -11,9 +11,12 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class GetAveragePrice implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private static final Logger LOGGER = LoggerFactory.getLogger(GetAveragePrice.class);
@@ -76,10 +79,24 @@ public class GetAveragePrice implements RequestHandler<APIGatewayProxyRequestEve
             }
             var sumLower = sumOfPrices(responseItems, LOW_PRICE);
             var sumHigher = sumOfPrices(responseItems, HIGH_PRICE);
+            var minLower = minPrice(responseItems, LOW_PRICE, BigDecimal::compareTo);
+            var minHigh = minPrice(responseItems, HIGH_PRICE, BigDecimal::compareTo);
+            var maxLower = minPrice(responseItems, LOW_PRICE, Comparator.reverseOrder());
+            var maxHigh = minPrice(responseItems, HIGH_PRICE, Comparator.reverseOrder());
+            var lowerMedian = median(extractPrices(responseItems, LOW_PRICE));
+            var higherMedian = median(extractPrices(responseItems, HIGH_PRICE));
             return response.withStatusCode(SUCCESS)
-                    .withBody("Average lower = " + (sumLower.divide(BigDecimal.valueOf(numItems), MATH_CONTEXT))
-                            + ", Average higher = " + (sumHigher.divide(BigDecimal.valueOf(numItems), MATH_CONTEXT))
-                            + ", Prices analyzed = " + numItems)
+                    .withBody(format(Map.of(
+                            "Average lower", (sumLower.divide(BigDecimal.valueOf(numItems), MATH_CONTEXT)),
+                            "Average higher", (sumHigher.divide(BigDecimal.valueOf(numItems), MATH_CONTEXT)),
+                            "Prices analyzed", BigDecimal.valueOf(numItems),
+                            "Min lower", minLower,
+                            "Min higher", minHigh,
+                            "Max lower", maxLower,
+                            "Max higher", maxHigh,
+                            "Lower median", lowerMedian,
+                            "Higher median", higherMedian
+                    )))
                     .withHeaders(Map.of(CONTENT_TYPE, TEXT_PLAIN));
         }
         catch (Exception error) {
@@ -88,11 +105,37 @@ public class GetAveragePrice implements RequestHandler<APIGatewayProxyRequestEve
         }
     }
 
+    private BigDecimal median(List<BigDecimal> list) {
+        var copy = new ArrayList<>(list);
+        copy.sort(BigDecimal::compareTo);
+        var n = copy.size();
+        return n % 2 == 0 ? (copy.get(n / 2).add(copy.get(n / 2 - 1)).divide(BigDecimal.TWO, MATH_CONTEXT)) : copy.get(n / 2);
+    }
+
+    private String format(Map<String, BigDecimal> params) {
+        return params.entrySet().stream().map(v -> v.getKey() + " = " + v.getValue()).collect(Collectors.joining(", "));
+    }
+
+    private List<BigDecimal> extractPrices(List<Map<String, AttributeValue>> responseItems, String fieldName) {
+        return responseItems.stream()
+                .map(v -> v.get(fieldName))
+                .map(v -> new BigDecimal(v.n()))
+                .toList();
+    }
+
     private static BigDecimal sumOfPrices(List<Map<String, AttributeValue>> responseItems, String fieldName) {
         return responseItems.stream()
                 .map(v -> v.get(fieldName))
                 .map(v -> new BigDecimal(v.n()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal minPrice(List<Map<String, AttributeValue>> responseItems, String fieldName, Comparator<BigDecimal> comparator) {
+        return responseItems.stream()
+                .map(v -> v.get(fieldName))
+                .map(v -> new BigDecimal(v.n()))
+                .min(comparator)
+                .orElseThrow();
     }
 
     private static APIGatewayProxyResponseEvent createBadRequest(APIGatewayProxyResponseEvent response, String reason) {
